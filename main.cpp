@@ -1410,6 +1410,7 @@ int main(int arg,char* argv[]){
 
    // pthread_exit(NULL);
 }*/
+/*
 //12 tsd_destructor.c
 #include<pthread.h>
 #include<stdlib.h>
@@ -1472,6 +1473,117 @@ int main(int argc,char* argv[]){
     pthread_join(thread1,NULL);
     pthread_join(thread2,NULL);
 
+}*/
+
+
+//12.sched_attr.c
+/*
+#include<unistd.h>
+#include<pthread.h>
+#include<stdlib.h>
+#include<stdio.h>
+
+void* thread_routine(void*){
+    int my_policy;
+    struct sched_param my_param;
+
+    pthread_getschedparam(pthread_self(),&my_policy,&my_param);
+    printf("thread_routine running at %s/%d\n",my_policy==SCHED_FIFO?"FIFO":
+                                               my_policy==SCHED_RR?"RR":
+                                               my_policy==SCHED_OTHER?"OTHRE":
+                                               "unknown");
+    return NULL;
+}
+
+int main(int argc,char* argv[]){
+    pthread_t thread_id;
+    pthread_attr_t thread_attr;
+    int thread_policy;
+    struct sched_param thread_param;
+    int rr_min_priority,rr_max_priority;
+    int status;
+
+
+    pthread_attr_init(&thread_attr);
+
+    pthread_attr_getschedpolicy(&thread_attr,&thread_policy);
+    pthread_attr_getschedparam(&thread_attr,&thread_param);
+
+    printf("Default policy is %s,priority is %d\n",thread_policy==SCHED_FIFO?"FIFO":
+                                               thread_policy==SCHED_RR?"RR":
+                                               thread_policy==SCHED_OTHER?"OTHRE":
+                                               "unknown",thread_param.__sched_priority);
+
+    pthread_attr_setschedpolicy(&thread_attr,SCHED_RR);
+
+    rr_min_priority=sched_get_priority_min(SCHED_RR);
+    rr_max_priority=sched_get_priority_max(SCHED_RR);
+
+    thread_param.__sched_priority=(rr_max_priority+rr_min_priority)/2;
+    printf("SCHED_RR priority range is %d to %d:using %d\n",
+           rr_min_priority,rr_max_priority,thread_param.__sched_priority);
+    pthread_attr_setschedparam(&thread_attr,&thread_param);
+
+    printf("creating thread at RR/%d\n",thread_param.__sched_priority);
+
+    status=pthread_attr_setinheritsched(&thread_attr,PTHREAD_EXPLICIT_SCHED);
+    if(status!=0){
+        fprintf(stderr,"pthread_attr_setinheritsched\n");
+        exit(status);
+    }
+    status = pthread_create(&thread_id,&thread_attr,thread_routine,NULL);
+
+    if(status!=0){
+        fprintf(stderr,"pthread_create\n");
+        exit(status);
+    }
+    pthread_join(thread_id,NULL);
+
+    printf("main exiting\n");
+    return 0;
+}*/
+
+#include<unistd.h>
+#include<pthread.h>
+#include<sched.h>
+#include<string.h>
+#include<stdlib.h>
+#include<stdio.h>
+#define THREADS 5
+typedef struct thread_tag{
+    int index;
+    pthread_t id;
+}thread_t;
+thread_t threads[THREADS];
+int rr_min_priority;
+void* thread_routine(void* arg){
+    thread_t *self=(thread_t*)arg;
+    int my_policy;
+    struct sched_param my_param;
+    int status;
+    my_param.__sched_priority=rr_min_priority+self->index;
+    printf("Thread %d will set SCHED_RR,priority %d\n",self->index,my_param.__sched_priority);
+    pthread_setschedparam(self->id,SCHED_RR,&my_param);
+
+    printf("thread_routine %d running at %s/%d\n",self->index,my_policy==SCHED_FIFO?"FIFO":
+                                                            my_policy==SCHED_RR?"RR":
+                                                            my_policy==SCHED_OTHER?"OTHER":
+                                                            "unknown",my_param.__sched_priority);
+    return NULL;
+}
+
+int main(int argc,char* argv[]){
+    int count,status;
+    rr_min_priority=sched_get_priority_min(SCHED_RR);
+    for(count=0;count<THREADS;count++){
+        threads[count].index=count;
+        pthread_create(&threads[count].id,NULL,thread_routine,&threads[count]);
+    }
+    for(count=0;count<THREADS;count++){
+        pthread_join(threads[count].id,NULL);
+    }
+    printf("main exiting\n");
+    return 0;
 }
 
 
