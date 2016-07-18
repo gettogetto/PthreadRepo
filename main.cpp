@@ -1542,7 +1542,7 @@ int main(int argc,char* argv[]){
     printf("main exiting\n");
     return 0;
 }*/
-
+/*
 #include<unistd.h>
 #include<pthread.h>
 #include<sched.h>
@@ -1584,7 +1584,141 @@ int main(int argc,char* argv[]){
     }
     printf("main exiting\n");
     return 0;
+}*/
+
+//12barrier.c
+/*
+#include<pthread.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<unistd.h>
+#include<errno.h>
+typedef struct barrier_tag{
+    pthread_mutex_t mutex;//control access to barrier
+    pthread_cond_t cv;//wait for barrier
+    int valid;//set when valid
+    int threadshold;//number of threads required
+    int counter;//current number of threads
+    unsigned long cycle;//count cycles
+}barrier_t;
+
+#define BARRIER_VALID 0xdbcafe
+#define BARRIER_INITIALIZER(cnt)\
+{PTHREAD_MUTEX_INITIALIZER,PTHREAD_COND_INITIALIZER,BARRIER_VALID,cnt,cnt,0}
+int barrier_init(barrier_t* barrier,int count){
+    int status;
+    barrier->threadshold=barrier->counter=count;
+    barrier->cycle=0;
+
+    status=pthread_mutex_init(&barrier->mutex,NULL);
+    status=pthread_cond_init(&barrier->cv,NULL);
+    if(status){
+        pthread_mutex_destroy(&barrier->mutex);
+        return status;
+    }
+    barrier->valid=BARRIER_VALID;
+    return 0;
 }
+int barrier_destroy(barrier_t* barrier){
+    int status,status2;
+    if(barrier->valid!=BARRIER_VALID){
+        return EINVAL;
+    }
+    status=pthread_mutex_lock(&barrier->mutex);
+    if(barrier->counter!=barrier->threadshold){
+        pthread_mutex_unlock(&barrier->mutex);
+        return EBUSY;
+    }
+    barrier->valid=0;
+    status=pthread_mutex_unlock(&barrier->mutex);
+
+    status=pthread_mutex_destroy(&barrier->mutex);
+    status2=pthread_cond_destroy(&barrier->cv);
+
+    return (status!=0?status:status2);
+}
+int barrier_wait(barrier_t* barrier){
+    int status,cancel,tmp,cycle;
+    if(barrier->valid!=BARRIER_VALID){
+        return EINVAL;
+    }
+    status=pthread_mutex_lock(&barrier->mutex);
+    cycle=barrier->cycle;
+    if(--barrier->counter==0){
+        barrier->cycle++;
+        barrier->counter=barrier->threadshold;
+        status=pthread_cond_broadcast(&barrier->cv);
+    }else{
+        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE,&cancel);
+        while(cycle==barrier->cycle){
+            status=pthread_cond_wait(&barrier->cv,&barrier->mutex);
+        }
+        pthread_setcancelstate(cancel,&tmp);
+    }
+    pthread_mutex_unlock(&barrier->mutex);
+    return status;
+}
+
+#define THREADS 5
+#define ARRAY 6
+#define INLOOPS 1000
+#define OUTLOOPS 10
+
+typedef struct thread_tag{
+    pthread_t thread_id;
+    int number;
+    int increment;
+    int array[ARRAY];
+}thread_t;
+
+
+barrier_t barrier;
+thread_t thread[THREADS];
+void* thread_routine(void* arg){
+    thread_t* self=(thread_t*)arg;
+    int in_loop,out_loop,count,status;
+    for(out_loop=0;out_loop<OUTLOOPS;out_loop++){
+        status=barrier_wait(&barrier);
+        for(in_loop=0;in_loop<INLOOPS;in_loop++){
+            for(count=0;count<ARRAY;count++){
+                self->array[count]+=self->increment;
+            }
+
+        }
+        status=barrier_wait(&barrier);
+        if(status==-1){
+            int thread_num;
+            for(thread_num=0;thread_num<THREADS;thread_num++){
+                thread[thread_num].increment+=1;
+            }
+        }
+    }
+    return NULL;
+}
+int main(int argc,char* argv[]){
+    int thread_count,array_count;
+    int status;
+    barrier_init(&barrier,THREADS);
+    for(thread_count=0;thread_count<THREADS;thread_count++){
+        thread[thread_count].increment=thread_count;
+        thread[thread_count].number=thread_count;
+        for(array_count=0;array_count<ARRAY;array_count++){
+            thread[thread_count].array[array_count]=array_count+1;
+        }
+        status=pthread_create(&thread[thread_count].thread_id,NULL,thread_routine,(void*)&thread[thread_count]);
+
+    }
+    for(thread_count=0;thread_count<THREADS;thread_count++){
+        status=pthread_join(thread[thread_count].thread_id,NULL);
+        printf("%02d:(%d) ",thread_count,thread[thread_count].increment);
+        for(array_count=0;array_count<ARRAY;array_count++){
+            printf("%010u ",thread[thread_count].array[array_count]);
+        }
+        printf("\n");
+    }
+    barrier_destroy(&barrier);
+    return 0;
+}*/
 
 
 
