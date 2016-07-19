@@ -1,7 +1,7 @@
 #project(pthread_create)
 cmake_minimum_required(VERSION 2.8)
 find_package(Threads)
-add_executable(myapp  rwlock.c rwlock_test.c)
+add_executable(myapp workq.c workq_test.c)
 target_link_libraries(myapp ${CMAKE_THREAD_LIBS_INIT})
 #c++11
 include(CheckCXXCompilerFlag)
